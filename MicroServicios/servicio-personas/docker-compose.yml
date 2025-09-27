@@ -1,0 +1,13 @@
+version: "3.9"
+
+networks:
+  micro_net:
+    external: true
+
+services:
+  servicio-personas:
+    build: .
+    env_file: ./.env
+    networks: [ micro_net ]
+    ports:
+      - "8085:8081"   # para evitar choque si 8081 host está ocupado

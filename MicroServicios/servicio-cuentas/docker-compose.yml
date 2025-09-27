@@ -1,0 +1,11 @@
+networks:
+  micro_net:
+    external: true
+
+services:
+  servicio-cuentas:
+    build: .
+    env_file: ./.env
+    networks: [ micro_net ]
+    ports:
+      - "8086:8082"   # host:container
