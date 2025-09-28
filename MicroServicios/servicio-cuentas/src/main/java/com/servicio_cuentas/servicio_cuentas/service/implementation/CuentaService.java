@@ -1,14 +1,13 @@
 package com.servicio_cuentas.servicio_cuentas.service.implementation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.servicio_cuentas.servicio_cuentas.dtos.CuentaActualizarReq;
 import com.servicio_cuentas.servicio_cuentas.dtos.CuentaCrearReq;
 import com.servicio_cuentas.servicio_cuentas.dtos.CuentaResp;
+import com.servicio_cuentas.servicio_cuentas.feign.PersonasClient;
 import com.servicio_cuentas.servicio_cuentas.jpa.entity.CuentaEntity;
 import com.servicio_cuentas.servicio_cuentas.jpa.repository.CuentaRepository;
 import com.servicio_cuentas.servicio_cuentas.mapper.CuentaMapper;
-import com.servicio_cuentas.servicio_cuentas.messaging.EventosCuentasProducer;
 import com.servicio_cuentas.servicio_cuentas.service.ICuentaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,8 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +23,14 @@ public class CuentaService implements ICuentaService {
 
     private final CuentaRepository cuentaRepo;
     private final CuentaMapper cuentaMapper;
-    private final EventosCuentasProducer producer;
     private final ObjectMapper om = new ObjectMapper();
+    private final PersonasClient personasClient;
 
     @Override
     @Transactional
     public CuentaResp crear(CuentaCrearReq req) {
+
+        var cli = validarClienteExisteYActivo(req.getIdCliente());
         cuentaRepo.findByNumeroCuenta(req.getNumeroCuenta())
                 .ifPresent(x -> {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Número de cuenta ya existe");
@@ -46,11 +45,26 @@ public class CuentaService implements ICuentaService {
         cta.setEstado(1);
         cta = cuentaRepo.save(cta);
 
-        publicarCuentaCreada(cta);
-
         return new CuentaResp(
                 cta.getId(), cta.getNumeroCuenta(), cta.getTipo(), cta.getEstado(),
                 cta.getIdCliente(), saldoActual(cta));
+    }
+
+    private Object validarClienteExisteYActivo(Long idCliente) {
+        try {
+            var resp = personasClient.obtenerCliente(idCliente);
+            Object estado = resp.get("estado");
+            if (estado instanceof Number num && num.intValue() == 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_ENTITY, "Cliente inactivo");
+            }
+            return resp;
+        } catch (feign.FeignException.NotFound e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Cliente no existe");
+        } catch (feign.FeignException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "No fue posible validar el cliente en servicio-personas");
+        }
     }
 
     @Override
@@ -86,26 +100,10 @@ public class CuentaService implements ICuentaService {
                 c.getIdCliente(), saldoActual(c));
     }
 
-    /* ================== helpers ================== */
 
     private BigDecimal saldoActual(CuentaEntity c) {
         // Si no hay movimientos, el saldo actual es el saldo inicial
         return c.getSaldoInicial();
     }
 
-    private void publicarCuentaCreada(CuentaEntity c) {
-        try {
-            ObjectNode payload = om.createObjectNode();
-            payload.put("type", "AccountCreated");
-            payload.put("eventId", UUID.randomUUID().toString());
-            payload.put("occurredAt", OffsetDateTime.now().toString());
-            var data = payload.putObject("data");
-            data.put("cuentaId", c.getId());
-            data.put("numero", c.getNumeroCuenta());
-            data.put("tipo", c.getTipo());
-            data.put("idCliente", c.getIdCliente());
-            producer.publicarCuentaCreada(om.writeValueAsString(payload));
-        } catch (Exception ignored) {
-        }
-    }
 }

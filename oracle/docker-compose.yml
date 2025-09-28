@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  oracle-xe:
+    image: gvenzl/oracle-xe:21.3.0
+    container_name: oracle-xe
+    environment:
+      ORACLE_PASSWORD: Admin#2025   # contraseña para SYS, SYSTEM, PDBADMIN
+      APP_USER: appuser             # usuario adicional
+      APP_USER_PASSWORD: appuserpwd
+    ports:
+      - "1521:1521"   # listener
+      - "5500:5500"   # Enterprise Manager Express
+    volumes:
+      - ./oradata:/opt/oracle/oradata
+    restart: unless-stopped

@@ -16,8 +16,8 @@ public interface IClienteService {
 
     Page<ClienteResp> listar(String identificacion, String nombre, Pageable pageable);
 
-    void desactivar(Long idCliente);  // baja lógica (estado=0)
+    void desactivar(Long idCliente);
 
-    void eliminar(Long idCliente);    // si quieres hard delete (opcional)
+    void eliminar(Long idCliente);
 
 }

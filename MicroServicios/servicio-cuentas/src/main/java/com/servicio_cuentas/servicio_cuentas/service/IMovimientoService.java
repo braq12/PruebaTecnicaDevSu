@@ -8,5 +8,6 @@ import java.util.List;
 
 public interface IMovimientoService {
     MovimientoResp registrar(MovimientoCrearReq req);
+
     List<MovimientoResp> listarPorRango(Long idCuenta, OffsetDateTime desde, OffsetDateTime hasta);
 }

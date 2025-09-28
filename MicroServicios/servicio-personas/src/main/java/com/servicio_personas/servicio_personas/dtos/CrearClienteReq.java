@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
+
 public class CrearClienteReq {
     @NotBlank
     private String nombre;
@@ -16,4 +17,5 @@ public class CrearClienteReq {
     private String telefono;
     @NotBlank
     private String contrasena;
+    private boolean crearCuentaAutomatica;
 }

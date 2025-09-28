@@ -14,18 +14,13 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.OracleDialect
-
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-    consumer:
-      group-id: servicio-cuentas-grp
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-
-management:
-  endpoints:
-    web.exposure.include: health,info
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha

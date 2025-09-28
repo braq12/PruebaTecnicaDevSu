@@ -1,18 +1,15 @@
-// service/implementation/ClienteService.java
 package com.servicio_personas.servicio_personas.service.implementation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.servicio_personas.servicio_personas.dtos.ActualizarClienteReq;
 import com.servicio_personas.servicio_personas.dtos.ClienteResp;
 import com.servicio_personas.servicio_personas.dtos.CrearClienteReq;
+import com.servicio_personas.servicio_personas.feign.CuentasClient;
 import com.servicio_personas.servicio_personas.jpa.entity.ClienteEntity;
-import com.servicio_personas.servicio_personas.jpa.entity.PersonaEntity;
 import com.servicio_personas.servicio_personas.jpa.repository.ClienteRepository;
 import com.servicio_personas.servicio_personas.jpa.repository.PersonaRepository;
 import com.servicio_personas.servicio_personas.mapper.ClienteMapper;
 import com.servicio_personas.servicio_personas.mapper.PersonaMapper;
-import com.servicio_personas.servicio_personas.messaging.EventosClienteProducer;
 import com.servicio_personas.servicio_personas.service.IClienteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,9 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.OffsetDateTime;
-import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class ClienteService implements IClienteService {
@@ -33,8 +27,9 @@ public class ClienteService implements IClienteService {
     private final ClienteRepository clienteRepo;
     private final PersonaMapper personaMapper;
     private final ClienteMapper clienteMapper;
-    private final EventosClienteProducer producer;
     private final ObjectMapper om = new ObjectMapper();
+    private final CuentasClient cuentasClient;
+    private final CuentaAutoService cuentaAutoService;
 
     @Override
     @Transactional
@@ -44,16 +39,19 @@ public class ClienteService implements IClienteService {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Identificación ya registrada");
                 });
 
-        PersonaEntity persona = personaMapper.toEntity(req);
-        persona = personaRepo.save(persona);
+        var persona = personaRepo.save(personaMapper.toEntity(req));
 
-        ClienteEntity cliente = new ClienteEntity();
+        var cliente = new ClienteEntity();
         cliente.setPersona(persona);
         cliente.setContrasenaHash(hash(req.getContrasena()));
         cliente.setEstado(1);
         cliente = clienteRepo.save(cliente);
 
-        publicarEvento("CustomerCreated", cliente);
+        // Asíncrono: crear cuenta si el flag viene en true
+        if (req.isCrearCuentaAutomatica()) {
+            cuentaAutoService.crearCuentaInicialAsync(cliente.getIdCliente());
+        }
+
         return clienteMapper.toResp(cliente);
     }
 
@@ -94,8 +92,6 @@ public class ClienteService implements IClienteService {
         // Persistir (persona está en cascada si la entidad lo define; si no, guarda explícito)
         personaRepo.save(cliente.getPersona());
         cliente = clienteRepo.save(cliente);
-
-        publicarEvento("CustomerUpdated", cliente);
         return clienteMapper.toResp(cliente);
     }
 
@@ -107,7 +103,6 @@ public class ClienteService implements IClienteService {
         if (cliente.getEstado() == 0) return;
         cliente.setEstado(0);
         clienteRepo.save(cliente);
-        publicarEvento("CustomerDeactivated", cliente);
     }
 
     @Override
@@ -117,25 +112,10 @@ public class ClienteService implements IClienteService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado");
         }
         clienteRepo.deleteById(idCliente);
-        // (opcional) publicar un evento de borrado duro, si tu dominio lo requiere
     }
 
-    private void publicarEvento(String type, ClienteEntity c) {
-        try {
-            ObjectNode payload = om.createObjectNode();
-            payload.put("type", type);
-            payload.put("eventId", UUID.randomUUID().toString());
-            payload.put("occurredAt", OffsetDateTime.now().toString());
-            ObjectNode data = payload.putObject("data");
-            data.put("clienteId", c.getIdCliente());
-            data.put("nombre", c.getPersona().getNombre());
-            data.put("estado", c.getEstado());
-            producer.publicar(om.writeValueAsString(payload));
-        } catch (Exception ignored) {
-        }
-    }
 
     private String hash(String raw) {
-        return Integer.toHexString(raw.hashCode()); // reemplazar por BCrypt en prod
+        return Integer.toHexString(raw.hashCode());
     }
 }
