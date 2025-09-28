@@ -37,6 +37,9 @@ Puertos libres: 1521, 8085, 8086.
 Instrucciones:
 
 1. Ejecutar scripts.
+sI se desa levantar la bd en docker ejecutar con el docker compose oracle 
+
+docker compose up -d
 
 
 2. Variables de entorno (archivos .env)
